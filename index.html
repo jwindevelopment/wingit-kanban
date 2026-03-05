@@ -1127,6 +1127,7 @@ async function runJiraSync() {
   const prompt = 'You are a Jira integration assistant. Using the Atlassian MCP tools available to you, fetch Jira issues assigned to the current user.\n\nSteps:\n1. Use available MCP tools to discover accessible Jira sites/projects.\n2. Search for issues using this JQL: '+jql+'\n3. Limit results to '+maxTickets+' issues.\n4. Return ONLY a valid JSON array (no markdown fences, no explanation) using this exact structure:\n[{"key":"PROJ-123","title":"Issue summary","description":"Brief description or empty string","priority":"high","labels":["label1"]}]\n\nMap Jira priorities: Highest/High/Critical/Blocker -> "high", Medium -> "med", Low/Lowest/Minor/Trivial -> "low"\nIf no issues found or error, return: []\nReturn ONLY the JSON array.';
 
   const requestBody = JSON.stringify({
+    __api_key: jiraSettings.apiKey || '',   // proxy extracts this server-side
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4000,
     mcp_servers: [{ type: 'url', url: 'https://mcp.atlassian.com/v1/mcp', name: 'atlassian-mcp' }],
@@ -1134,7 +1135,7 @@ async function runJiraSync() {
   });
 
   const reqId  = 'req_' + Date.now();
-  const apiUrl = 'https://api.anthropic.com/v1/messages';
+  const apiUrl = 'http://localhost:3001/v1/messages'; // local proxy → api.anthropic.com
 
   if (!jiraSettings.apiKey) {
     clog('error', 'No Anthropic API key set. Open Settings (⚙) and add your key from console.anthropic.com/settings/keys');
@@ -1143,16 +1144,11 @@ async function runJiraSync() {
     return;
   }
   const reqHeaders = {
-    'Content-Type': 'application/json',
-    'x-api-key': jiraSettings.apiKey || '',
-    'anthropic-version': '2023-06-01',
-    'anthropic-dangerous-direct-browser-access': 'true',
-    'anthropic-beta': 'mcp-client-2025-04-04'
+    'Content-Type': 'application/json'
+    // Auth headers are added server-side by proxy.py to avoid CORS issues
   };
   clog('req', 'POST ' + apiUrl);
-  clog('debug', 'Headers: ' + JSON.stringify(Object.fromEntries(
-    Object.entries(reqHeaders).map(([k,v]) => [k, k==='x-api-key' ? v.slice(0,12)+'...' : v])
-  ), null, 2));
+  clog('debug', 'Routing via local proxy → api.anthropic.com (api key injected server-side)');
   netRecord(reqId, 'POST', apiUrl, requestBody);
 
   try {
