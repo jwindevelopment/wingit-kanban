@@ -67,7 +67,7 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
 
         # Basic auth: email:token base64 encoded
         creds    = base64.b64encode(f"{email}:{token}".encode()).decode()
-        api_url  = f"{domain}/rest/api/3/search"
+        api_url  = f"{domain}/rest/api/3/search/jql"
         params   = urllib.parse.urlencode({
             "jql":        jql,
             "maxResults": max_results,
