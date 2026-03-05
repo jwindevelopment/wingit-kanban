@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WingIt — Task Board</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f4f2ee; --surface: #ece9e3; --card: #ffffff;
+      --border: #d8d3ca; --border-bright: #b8b0a4;
+      --text: #1a1815; --text-muted: #7a736a; --text-dim: #b0a89e;
+      --accent-todo: #e03d00; --accent-prog: #c49a00; --accent-done: #008f5a;
+      --accent-jira: #0052CC;
+      --tag-bg: #e8e3dc; --tag-text: #6a635b;
+      --shadow: 0 2px 12px rgba(0,0,0,0.10); --col-width: 340px;
+    }
+    [data-theme="dark"] {
+      --bg: #0e0e0e; --surface: #161616; --card: #1d1d1d;
+      --border: #2a2a2a; --border-bright: #3d3d3d;
+      --text: #e8e8e8; --text-muted: #666; --text-dim: #444;
+      --accent-todo: #ff4d00; --accent-prog: #f5c518; --accent-done: #00d084;
+      --accent-jira: #4C9AFF;
+      --tag-bg: #252525; --tag-text: #aaa;
+      --shadow: 0 2px 12px rgba(0,0,0,0.5);
+    }
+    body, header, .card, .col-header, .modal, input, textarea, select, .tags-input-wrap {
+      transition: background 0.25s, border-color 0.25s, color 0.25s, box-shadow 0.25s;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; overflow-x: auto; }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.03; pointer-events: none; z-index: 9999;
+    }
+    header {
+      padding: 20px 36px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; background: var(--bg); z-index: 100; gap: 16px;
+    }
+    .header-left { display: flex; align-items: baseline; gap: 16px; }
+    .logo { font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 4px; color: var(--text); line-height: 1; }
+    .logo span { color: var(--accent-todo); }
+    .header-sub { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; }
+    .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .header-stats { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text-muted); display: flex; gap: 20px; }
+    .stat { display: flex; align-items: center; gap: 6px; }
+    .stat-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .hdr-btn {
+      background: none; border: 1px solid var(--border); color: var(--text-muted);
+      cursor: pointer; padding: 6px 12px; font-family: 'Space Mono', monospace;
+      font-size: 11px; letter-spacing: 1px; display: flex; align-items: center;
+      gap: 7px; transition: border-color 0.15s, color 0.15s, background 0.15s; white-space: nowrap;
+    }
+    .hdr-btn:hover { border-color: var(--border-bright); color: var(--text); }
+    .btn-jira { border-color: var(--accent-jira); color: var(--accent-jira); }
+    .btn-jira:hover { background: rgba(0,82,204,0.08); }
+    [data-theme="dark"] .btn-jira:hover { background: rgba(76,154,255,0.1); }
+    .btn-jira:disabled { opacity: 0.5; cursor: not-allowed; }
+    .sync-spinner {
+      display: inline-block; width: 11px; height: 11px;
+      border: 2px solid var(--accent-jira); border-top-color: transparent;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .sync-bar {
+      font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px;
+      padding: 6px 36px; display: none; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sync-bar.visible { display: flex; }
+    .sync-bar.success { color: var(--accent-done); background: rgba(0,143,90,0.06); }
+    .sync-bar.error   { color: var(--accent-todo); background: rgba(224,61,0,0.06); }
+    .sync-bar.info    { color: var(--text-muted); }
+    .board { display: flex; gap: 20px; padding: 28px 36px 40px; min-height: calc(100vh - 80px); align-items: flex-start; }
+    .column { width: var(--col-width); flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+    .col-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border: 1px solid var(--border); background: var(--surface);
+      position: relative; overflow: hidden;
+    }
+    .col-header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .col-todo .col-header::before { background: var(--accent-todo); }
+    .col-prog .col-header::before { background: var(--accent-prog); }
+    .col-done .col-header::before { background: var(--accent-done); }
+    .col-title { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 3px; color: var(--text); }
+    .col-count { font-family: 'Space Mono', monospace; font-size: 11px; padding: 3px 8px; border: 1px solid var(--border-bright); color: var(--text-muted); }
+    .col-body { display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
+    .col-body.drag-over { outline: 2px dashed var(--border-bright); outline-offset: 4px; background: rgba(255,255,255,0.02); }
+    .card {
+      background: var(--card); border: 1px solid var(--border); padding: 16px;
+      cursor: grab; transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+      position: relative; animation: cardIn 0.2s ease;
+    }
+    @keyframes cardIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .card:hover { border-color: var(--border-bright); box-shadow: var(--shadow); transform: translateY(-1px); }
+    .card.dragging { opacity: 0.4; cursor: grabbing; }
+    .card.jira-card { border-left: 3px solid var(--accent-jira); }
+    .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .card-title { font-weight: 500; font-size: 14px; line-height: 1.4; color: var(--text); flex: 1; }
+    .card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+    .card:hover .card-actions { opacity: 1; }
+    .card-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 4px; font-size: 13px; transition: color 0.1s; }
+    .card-btn:hover { color: var(--text); }
+    .card-btn.delete:hover { color: #ff4444; }
+    .card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .card-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tag { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; padding: 2px 6px; background: var(--tag-bg); color: var(--tag-text); border: 1px solid var(--border); }
+    .tag.jira-key { background: rgba(0,82,204,0.08); color: var(--accent-jira); border-color: var(--accent-jira); }
+    [data-theme="dark"] .tag.jira-key { background: rgba(76,154,255,0.1); }
+    .priority { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; padding: 2px 7px; border: 1px solid; font-weight: 700; }
+    .priority-high { color: var(--accent-todo); border-color: var(--accent-todo); background: rgba(255,77,0,0.08); }
+    .priority-med  { color: var(--accent-prog); border-color: var(--accent-prog); background: rgba(245,197,24,0.08); }
+    .priority-low  { color: var(--accent-done); border-color: var(--accent-done); background: rgba(0,208,132,0.08); }
+    #body-done .card { border-left: 3px solid var(--accent-done); opacity: 0.82; }
+    #body-done .card:hover { opacity: 1; }
+    #body-done .card-title { text-decoration: line-through; color: var(--text-muted); }
+    #body-done .card-desc { opacity: 0.7; }
+    .done-check { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--accent-done); color: #fff; font-size: 9px; font-weight: 700; flex-shrink: 0; margin-right: 2px; }
+    .add-card-btn {
+      width: 100%; padding: 10px; background: none; border: 1px dashed var(--border);
+      color: var(--text-dim); cursor: pointer; font-family: 'Space Mono', monospace;
+      font-size: 11px; letter-spacing: 2px; text-transform: uppercase; transition: all 0.15s; margin-top: 4px;
+    }
+    .add-card-btn:hover { border-color: var(--border-bright); color: var(--text-muted); background: var(--surface); }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s; backdrop-filter: blur(4px);
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border-bright);
+      width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+      padding: 28px; transform: translateY(12px) scale(0.98); transition: transform 0.2s;
+    }
+    .modal-overlay.open .modal { transform: translateY(0) scale(1); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 3px; color: var(--text); }
+    .modal-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 4px; transition: color 0.1s; }
+    .modal-close:hover { color: var(--text); }
+    .form-group { margin-bottom: 18px; }
+    label { display: block; font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+    input[type="text"], input[type="number"], textarea, select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); padding: 10px 12px; font-family: 'DM Sans', sans-serif;
+      font-size: 13px; outline: none; transition: border-color 0.15s; resize: vertical;
+      appearance: none; -webkit-appearance: none;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, textarea:focus, select:focus { border-color: var(--border-bright); }
+    select option { background: var(--surface); }
+    .priority-btns { display: flex; gap: 8px; }
+    .priority-btn {
+      flex: 1; padding: 8px; background: none; border: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer; font-family: 'Space Mono', monospace;
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase; transition: all 0.15s;
+    }
+    .priority-btn.active-high { border-color: var(--accent-todo); color: var(--accent-todo); background: rgba(255,77,0,0.08); }
+    .priority-btn.active-med  { border-color: var(--accent-prog); color: var(--accent-prog); background: rgba(245,197,24,0.08); }
+    .priority-btn.active-low  { border-color: var(--accent-done); color: var(--accent-done); background: rgba(0,208,132,0.08); }
+    .tags-input-wrap {
+      display: flex; flex-wrap: wrap; gap: 6px; padding: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+      min-height: 42px; align-items: center; cursor: text; transition: border-color 0.15s;
+    }
+    .tags-input-wrap:focus-within { border-color: var(--border-bright); }
+    .tag-chip { display: flex; align-items: center; gap: 4px; background: var(--tag-bg); border: 1px solid var(--border); padding: 2px 6px; font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--tag-text); }
+    .tag-chip-rm { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0; font-size: 11px; }
+    .tag-chip-rm:hover { color: #ff4444; }
+    #tag-input { background: none; border: none; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; flex: 1; min-width: 80px; padding: 0; }
+    .tag-hint { font-size: 10px; color: var(--text-dim); margin-top: 4px; font-family: 'Space Mono', monospace; }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+    .btn { padding: 10px 20px; cursor: pointer; font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; border: none; transition: all 0.15s; }
+    .btn-ghost { background: none; border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-ghost:hover { border-color: var(--border-bright); color: var(--text); }
+    .btn-primary { background: var(--accent-todo); color: #000; font-weight: 700; }
+    .btn-primary:hover { background: #ff6620; }
+    .settings-section { border-top: 1px solid var(--border); padding-top: 18px; margin-top: 4px; }
+    .settings-section-title { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 14px; }
+    .last-sync-info { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text-muted); padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .last-sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-done); display: inline-block; margin-right: 6px; }
+    .sync-result-list { list-style: none; margin-top: 12px; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+    .sync-result-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); font-size: 12px; }
+    .sync-result-item .key { font-family: 'Space Mono', monospace; font-size: 9px; color: var(--accent-jira); white-space: nowrap; }
+    .sync-result-item .title { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sync-result-item .status { font-family: 'Space Mono', monospace; font-size: 9px; color: var(--text-muted); white-space: nowrap; }
+    .sync-result-item .status.added { color: var(--accent-done); }
+    .empty-state { text-align: center; padding: 32px 16px; color: var(--text-dim); font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px; border: 1px dashed var(--border); }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Dev Console (light) ── */
+    #dev-console {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 320px;
+      background: #f8f7f5;
+      border-top: 2px solid #c8c2ba;
+      z-index: 9000;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+      font-family: 'Space Mono', monospace;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.10);
+    }
+    #dev-console.open { transform: translateY(0); }
+
+    .dev-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: #ece9e3;
+      border-bottom: 1px solid #d0cbc3;
+      flex-shrink: 0;
+      height: 34px;
+    }
+
+    .dev-toolbar-title {
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #a09890;
+      padding: 0 14px;
+      border-right: 1px solid #d0cbc3;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .dev-toolbar-title .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #ccc;
+      transition: background 0.3s;
+    }
+    .dev-toolbar-title .dot.active { background: #008f5a; box-shadow: 0 0 6px rgba(0,143,90,0.5); }
+
+    .dev-tab {
+      padding: 0 14px;
+      height: 100%;
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #a09890;
+      background: none;
+      border: none;
+      border-right: 1px solid #d0cbc3;
+      cursor: pointer;
+      transition: color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .dev-tab:hover { color: #4a4540; background: #e4e0d8; }
+    .dev-tab.active { color: #1a1815; background: #f8f7f5; border-bottom: 2px solid #0052CC; }
+
+    .dev-toolbar-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      height: 100%;
+    }
+
+    .dev-action-btn {
+      padding: 0 12px;
+      height: 100%;
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #a09890;
+      background: none;
+      border: none;
+      border-left: 1px solid #d0cbc3;
+      cursor: pointer;
+      transition: color 0.15s;
+      white-space: nowrap;
+    }
+    .dev-action-btn:hover { color: #1a1815; }
+    .dev-action-btn.close-btn:hover { color: #e03d00; }
+
+    .dev-body {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .dev-panel {
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      padding: 4px 0;
+      display: none;
+      background: #f8f7f5;
+    }
+    .dev-panel.active { display: block; }
+
+    /* Log entries */
+    .log-entry {
+      display: flex;
+      gap: 0;
+      padding: 2px 0;
+      font-size: 11px;
+      line-height: 1.6;
+      border-bottom: 1px solid #ede9e3;
+      animation: logIn 0.1s ease;
+    }
+    @keyframes logIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .log-ts {
+      color: #b8b0a8;
+      padding: 0 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      font-size: 10px;
+      padding-top: 1px;
+    }
+
+    .log-level {
+      width: 52px;
+      flex-shrink: 0;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding-top: 2px;
+    }
+
+    .log-msg {
+      flex: 1;
+      padding-right: 12px;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .log-entry.log-info  .log-level { color: #0052CC; }
+    .log-entry.log-info  .log-msg   { color: #4a4540; }
+    .log-entry.log-ok    .log-level { color: #008f5a; }
+    .log-entry.log-ok    .log-msg   { color: #2a5a40; }
+    .log-entry.log-warn  .log-level { color: #c49a00; }
+    .log-entry.log-warn  .log-msg   { color: #7a5e00; }
+    .log-entry.log-error .log-level { color: #e03d00; }
+    .log-entry.log-error .log-msg   { color: #c02800; }
+    .log-entry.log-error            { background: #fff5f2; }
+    .log-entry.log-req   .log-level { color: #6d28d9; }
+    .log-entry.log-req   .log-msg   { color: #5b21b6; }
+    .log-entry.log-res   .log-level { color: #047857; }
+    .log-entry.log-res   .log-msg   { color: #065f46; }
+    .log-entry.log-debug .log-level { color: #c0bab2; }
+    .log-entry.log-debug .log-msg   { color: #b8b0a8; }
+
+    /* Request/Response inspector */
+    .req-entry {
+      margin: 6px 10px;
+      border: 1px solid #d8d3ca;
+      background: #fff;
+    }
+
+    .req-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .req-header:hover { background: #f0ece6; }
+
+    .req-method {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 2px 6px;
+      background: #e8f0fe;
+      color: #0052CC;
+      border: 1px solid #b8d0f8;
+      flex-shrink: 0;
+    }
+
+    .req-status {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 2px 6px;
+      flex-shrink: 0;
+    }
+    .req-status.ok  { background: rgba(0,143,90,0.08); color: #008f5a; border: 1px solid #008f5a; }
+    .req-status.err { background: rgba(224,61,0,0.08); color: #e03d00; border: 1px solid #e03d00; }
+    .req-status.pending { background: rgba(196,154,0,0.08); color: #c49a00; border: 1px solid #c49a00; }
+
+    .req-url {
+      flex: 1;
+      font-size: 10px;
+      color: #7a736a;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .req-time { font-size: 10px; color: #b8b0a8; flex-shrink: 0; }
+    .req-chevron { color: #b8b0a8; font-size: 10px; flex-shrink: 0; transition: transform 0.15s; }
+    .req-entry.expanded .req-chevron { transform: rotate(90deg); }
+
+    .req-body {
+      display: none;
+      border-top: 1px solid #ede9e3;
+    }
+    .req-entry.expanded .req-body { display: block; }
+
+    .req-section {
+      padding: 8px 12px;
+      border-bottom: 1px solid #ede9e3;
+    }
+
+    .req-section-title {
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #b8b0a8;
+      margin-bottom: 6px;
+    }
+
+    .req-code {
+      font-size: 10px;
+      color: #4a4540;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #f0ece6;
+      padding: 8px;
+      border: 1px solid #d8d3ca;
+      line-height: 1.5;
+    }
+
+    /* State panel */
+    .state-section { padding: 10px 12px; border-bottom: 1px solid #ede9e3; }
+    .state-section-title { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: #b8b0a8; margin-bottom: 8px; }
+    .state-grid { display: grid; grid-template-columns: 140px 1fr; gap: 4px 12px; font-size: 10px; }
+    .state-key { color: #a09890; }
+    .state-val { color: #1a1815; word-break: break-all; }
+
+    /* Console toggle handle */
+    #console-handle {
+      position: fixed;
+      bottom: 0;
+      right: 20px;
+      z-index: 9001;
+      background: #ece9e3;
+      border: 1px solid #c8c2ba;
+      border-bottom: none;
+      padding: 5px 14px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #a09890;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #console-handle:hover { color: #1a1815; border-color: #a09890; }
+    #console-handle .badge {
+      background: #e03d00;
+      color: #fff;
+      font-size: 8px;
+      padding: 1px 5px;
+      border-radius: 2px;
+      display: none;
+    }
+    #console-handle .badge.visible { display: inline-block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo">Wing<span>It</span></div>
+    <div class="header-sub">Task Board</div>
+  </div>
+  <div class="header-right">
+    <div class="header-stats" id="stats"></div>
+    <button class="hdr-btn btn-jira" id="sync-btn" onclick="runJiraSync()">
+      <span id="sync-btn-icon">&#x21BB;</span>
+      <span id="sync-btn-label">Sync Jira</span>
+    </button>
+    <span id="sync-no-key-tip" style="display:none;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--accent-todo);cursor:pointer;" onclick="openSettings()" title="Click to open settings">&#x26A0; No API key</span>
+    <button class="hdr-btn" onclick="openSettings()" title="Jira settings">&#9881;</button>
+    <button class="hdr-btn" id="theme-toggle" onclick="toggleTheme()">
+      <span id="toggle-icon">&#x2600;</span>
+      <span id="toggle-label">Light</span>
+    </button>
+  </div>
+</header>
+
+<div class="sync-bar" id="sync-bar"><span id="sync-bar-text"></span></div>
+
+<div class="board">
+  <div class="column col-todo">
+    <div class="col-header">
+      <span class="col-title">To Do</span>
+      <span class="col-count" id="count-todo">0</span>
+    </div>
+    <div class="col-body" id="body-todo" data-col="todo"></div>
+    <button class="add-card-btn" onclick="openModal('todo')">+ Add Task</button>
+  </div>
+  <div class="column col-prog">
+    <div class="col-header">
+      <span class="col-title">In Progress</span>
+      <span class="col-count" id="count-prog">0</span>
+    </div>
+    <div class="col-body" id="body-prog" data-col="prog"></div>
+    <button class="add-card-btn" onclick="openModal('prog')">+ Add Task</button>
+  </div>
+  <div class="column col-done">
+    <div class="col-header">
+      <span class="col-title">Completed</span>
+      <span class="col-count" id="count-done">0</span>
+    </div>
+    <div class="col-body" id="body-done" data-col="done"></div>
+    <button class="add-card-btn" onclick="openModal('done')">+ Add Task</button>
+  </div>
+</div>
+
+<!-- Task Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOnOverlay(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-heading">New Task</div>
+      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+    </div>
+    <div class="form-group">
+      <label>Title</label>
+      <input type="text" id="f-title" placeholder="Task title..." />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="f-desc" rows="3" placeholder="Optional details..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Priority</label>
+      <div class="priority-btns">
+        <button class="priority-btn active-high" id="pb-high" onclick="setPriority('high')">High</button>
+        <button class="priority-btn" id="pb-med" onclick="setPriority('med')">Medium</button>
+        <button class="priority-btn" id="pb-low" onclick="setPriority('low')">Low</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Tags</label>
+      <div class="tags-input-wrap" id="tags-wrap" onclick="document.getElementById('tag-input').focus()">
+        <input type="text" id="tag-input" placeholder="Add tag, press Enter" />
+      </div>
+      <div class="tag-hint">Press Enter or comma to add a tag</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveCard()">Add Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settings-overlay" onclick="closeSettingsOnOverlay(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Jira Settings</div>
+      <button class="modal-close" onclick="closeSettings()">&#x2715;</button>
+    </div>
+    <div class="form-group">
+      <label>Max tickets to pull</label>
+      <input type="number" id="s-max" min="1" max="100" value="20" />
+    </div>
+    <div class="form-group">
+      <label>Anthropic API Key</label>
+      <div style="position:relative;">
+        <input type="password" id="s-apikey" placeholder="sk-ant-..." autocomplete="off" />
+        <button onclick="toggleApiKeyVisibility()" id="s-apikey-toggle" type="button" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--text-muted);padding:2px 4px;">SHOW</button>
+      </div>
+      <div class="tag-hint">Stored locally in your browser only. Get yours at console.anthropic.com/settings/keys</div>
+    </div>
+    <div class="form-group">
+      <label>JQL Query Override</label>
+      <textarea id="s-jql" rows="3" placeholder="assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC"></textarea>
+      <div class="tag-hint">Leave blank to use the default query shown above</div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">Sync Status</div>
+      <div class="last-sync-info" id="last-sync-info">
+        <span><span class="last-sync-dot" style="background:var(--text-dim)"></span>Never synced</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeSettings()">Close</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sync Results Modal -->
+<div class="modal-overlay" id="results-overlay" onclick="closeResultsOnOverlay(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="results-heading">Sync Complete</div>
+      <button class="modal-close" onclick="closeResults()">&#x2715;</button>
+    </div>
+    <div id="results-summary" style="font-size:13px;color:var(--text-muted);margin-bottom:16px;"></div>
+    <ul class="sync-result-list" id="results-list"></ul>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeResults()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Dev Console Handle ── -->
+<button id="console-handle" onclick="toggleConsole()">
+  <span>&#x25A0; Dev Console</span>
+  <span class="badge" id="error-badge">ERR</span>
+</button>
+
+<!-- ── Dev Console ── -->
+<div id="dev-console">
+  <div class="dev-toolbar">
+    <div class="dev-toolbar-title">
+      <span class="dot" id="console-dot"></span>
+      WINGIT CONSOLE
+    </div>
+    <button class="dev-tab active" id="tab-log"      onclick="switchTab('log')">Log</button>
+    <button class="dev-tab"        id="tab-network"  onclick="switchTab('network')">Network</button>
+    <button class="dev-tab"        id="tab-state"    onclick="switchTab('state')">State</button>
+    <div class="dev-toolbar-actions">
+      <button class="dev-action-btn" onclick="copyConsoleLog()">Copy Log</button>
+      <button class="dev-action-btn" onclick="clearConsole()">Clear</button>
+      <button class="dev-action-btn close-btn" onclick="toggleConsole()">&#x2715; Close</button>
+    </div>
+  </div>
+  <div class="dev-body">
+    <div class="dev-panel active" id="panel-log"></div>
+    <div class="dev-panel"        id="panel-network"></div>
+    <div class="dev-panel"        id="panel-state"></div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────
+let tasks        = JSON.parse(localStorage.getItem('kanban-tasks') || '[]');
+let modalCol     = 'todo';
+let editId       = null;
+let curPriority  = 'high';
+let curTags      = [];
+let dragId       = null;
+let jiraSettings = JSON.parse(localStorage.getItem('wingit-jira-settings') || '{}');
+
+// ── Seed data ─────────────────────────────────────────
+if (!tasks.length) {
+  tasks = [
+    { id: uid(), col: 'todo', title: 'Design onboarding flow', desc: 'Create wireframes and user journey for new user onboarding', priority: 'high', tags: ['design','ux'] },
+    { id: uid(), col: 'todo', title: 'Write API docs', desc: 'Document all REST endpoints with examples and error codes', priority: 'med', tags: ['docs','api'] },
+    { id: uid(), col: 'todo', title: 'Fix mobile nav bug', desc: '', priority: 'low', tags: ['bug','mobile'] },
+    { id: uid(), col: 'prog', title: 'Build auth system', desc: 'JWT-based auth with refresh tokens and role management', priority: 'high', tags: ['backend','security'] },
+    { id: uid(), col: 'prog', title: 'Migrate to PostgreSQL', desc: 'Move from SQLite to Postgres for production readiness', priority: 'med', tags: ['db','devops'] },
+    { id: uid(), col: 'done', title: 'Setup CI/CD pipeline', desc: 'GitHub Actions for automated tests and deployments', priority: 'high', tags: ['devops'] },
+    { id: uid(), col: 'done', title: 'Initial project scaffolding', desc: '', priority: 'low', tags: ['setup'] },
+  ];
+  save();
+}
+
+function uid()  { return Math.random().toString(36).slice(2,10); }
+function save() { localStorage.setItem('kanban-tasks', JSON.stringify(tasks)); }
+
+// ── Render ────────────────────────────────────────────
+function render() {
+  ['todo','prog','done'].forEach(col => {
+    const body     = document.getElementById('body-' + col);
+    const colTasks = tasks.filter(t => t.col === col);
+    document.getElementById('count-' + col).textContent = colTasks.length;
+    if (!colTasks.length) {
+      body.innerHTML = '<div class="empty-state">No tasks yet</div>';
+    } else {
+      body.innerHTML = '';
+      colTasks.forEach(t => body.appendChild(makeCard(t)));
+    }
+  });
+  renderStats();
+  bindDragDrop();
+}
+
+function makeCard(t) {
+  const el = document.createElement('div');
+  el.className  = 'card' + (t.jiraKey ? ' jira-card' : '');
+  el.dataset.id = t.id;
+  el.draggable  = true;
+  const keyTag  = t.jiraKey ? '<span class="tag jira-key">'+esc(t.jiraKey)+'</span>' : '';
+  el.innerHTML  = '<div class="card-top">'
+    + '<div class="card-title">' + (t.col==='done'?'<span class="done-check">&#x2713;</span>':'') + esc(t.title) + '</div>'
+    + '<div class="card-actions">'
+    + '<button class="card-btn" title="Edit" onclick="editCard(\''+t.id+'\')">&#x270E;</button>'
+    + '<button class="card-btn delete" title="Delete" onclick="deleteCard(\''+t.id+'\')">&#x2715;</button>'
+    + '</div></div>'
+    + (t.desc ? '<div class="card-desc">'+esc(t.desc)+'</div>' : '')
+    + '<div class="card-footer"><div class="tags">'+keyTag+t.tags.map(g=>'<span class="tag">'+esc(g)+'</span>').join('')+'</div>'
+    + '<span class="priority priority-'+t.priority+'">'+(t.priority==='med'?'Medium':t.priority==='high'?'High':'Low')+'</span>'
+    + '</div>';
+  return el;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderStats() {
+  const total = tasks.length;
+  const done  = tasks.filter(t => t.col === 'done').length;
+  const high  = tasks.filter(t => t.priority === 'high' && t.col !== 'done').length;
+  document.getElementById('stats').innerHTML =
+    '<span class="stat"><span class="stat-dot" style="background:var(--accent-done)"></span>'+done+'/'+total+' done</span>'
+    +'<span class="stat"><span class="stat-dot" style="background:var(--accent-todo)"></span>'+high+' high priority</span>';
+}
+
+// ── Task Modal ────────────────────────────────────────
+function openModal(col, id) {
+  id = id || null;
+  modalCol = col; editId = id; curTags = [];
+  const task = id ? tasks.find(t => t.id === id) : null;
+  document.getElementById('modal-heading').textContent = id ? 'Edit Task' : 'New Task';
+  document.getElementById('save-btn').textContent      = id ? 'Save Changes' : 'Add Task';
+  document.getElementById('f-title').value = task ? task.title : '';
+  document.getElementById('f-desc').value  = task ? task.desc  : '';
+  setPriority(task ? task.priority : 'high');
+  curTags = task ? [...task.tags] : [];
+  renderTagChips();
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('f-title').focus(), 150);
+}
+
+function closeModal()              { document.getElementById('modal-overlay').classList.remove('open'); editId = null; }
+function closeModalOnOverlay(e)    { if (e.target === document.getElementById('modal-overlay')) closeModal(); }
+
+function setPriority(p) {
+  curPriority = p;
+  ['high','med','low'].forEach(v => {
+    document.getElementById('pb-'+v).className = 'priority-btn' + (v===p ? ' active-'+v : '');
+  });
+}
+
+// ── Tags ──────────────────────────────────────────────
+function renderTagChips() {
+  const wrap = document.getElementById('tags-wrap');
+  const inp  = document.getElementById('tag-input');
+  wrap.innerHTML = '';
+  curTags.forEach((g, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.innerHTML = esc(g)+' <button class="tag-chip-rm" onclick="removeTag('+i+')">&#x2715;</button>';
+    wrap.appendChild(chip);
+  });
+  wrap.appendChild(inp);
+  inp.value = '';
+}
+
+function removeTag(i) { curTags.splice(i, 1); renderTagChips(); }
+
+document.getElementById('tag-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = e.target.value.trim().replace(/,/g,'');
+    if (val && !curTags.includes(val)) { curTags.push(val); renderTagChips(); }
+    else e.target.value = '';
+  } else if (e.key === 'Backspace' && !e.target.value && curTags.length) {
+    curTags.pop(); renderTagChips();
+  }
+});
+
+// ── CRUD ──────────────────────────────────────────────
+function saveCard() {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { document.getElementById('f-title').style.borderColor = '#ff4444'; return; }
+  document.getElementById('f-title').style.borderColor = '';
+  const raw = document.getElementById('tag-input').value.trim();
+  if (raw && !curTags.includes(raw)) curTags.push(raw);
+  const desc = document.getElementById('f-desc').value.trim();
+  if (editId) {
+    const t = tasks.find(x => x.id === editId);
+    if (t) { t.title = title; t.desc = desc; t.priority = curPriority; t.tags = [...curTags]; }
+  } else {
+    tasks.push({ id: uid(), col: modalCol, title, desc, priority: curPriority, tags: [...curTags] });
+  }
+  save(); render(); closeModal();
+}
+
+function editCard(id)   { const t = tasks.find(x => x.id === id); if (t) openModal(t.col, id); }
+function deleteCard(id) { tasks = tasks.filter(x => x.id !== id); save(); render(); }
+
+// ── Settings Modal ────────────────────────────────────
+function openSettings() {
+  document.getElementById('s-max').value    = jiraSettings.maxTickets || 20;
+  document.getElementById('s-jql').value    = jiraSettings.jql || '';
+  document.getElementById('s-apikey').value = jiraSettings.apiKey || '';
+  updateLastSyncDisplay();
+  document.getElementById('settings-overlay').classList.add('open');
+  // Briefly highlight the key field if missing
+  if (!jiraSettings.apiKey) {
+    setTimeout(function(){ document.getElementById('s-apikey').focus(); }, 200);
+  }
+}
+
+function toggleApiKeyVisibility() {
+  var inp = document.getElementById('s-apikey');
+  var btn = document.getElementById('s-apikey-toggle');
+  if (inp.type === 'password') { inp.type = 'text';     btn.textContent = 'HIDE'; }
+  else                         { inp.type = 'password'; btn.textContent = 'SHOW'; }
+}
+function closeSettings()           { document.getElementById('settings-overlay').classList.remove('open'); }
+function closeSettingsOnOverlay(e) { if (e.target === document.getElementById('settings-overlay')) closeSettings(); }
+
+function saveSettings() {
+  jiraSettings.maxTickets = parseInt(document.getElementById('s-max').value) || 20;
+  jiraSettings.jql        = document.getElementById('s-jql').value.trim();
+  const keyVal            = document.getElementById('s-apikey').value.trim();
+  if (keyVal) jiraSettings.apiKey = keyVal;
+  localStorage.setItem('wingit-jira-settings', JSON.stringify(jiraSettings));
+  updateSyncBtnState();
+  closeSettings();
+  showSyncBar('Settings saved.' + (keyVal ? ' API key stored.' : ''), 'info', 2500);
+}
+
+function updateSyncBtnState() {
+  var btn = document.getElementById('sync-btn');
+  var tip = document.getElementById('sync-no-key-tip');
+  if (!jiraSettings.apiKey) {
+    btn.title = 'Add your Anthropic API key in Settings first';
+    if (tip) tip.style.display = 'inline';
+  } else {
+    btn.title = '';
+    if (tip) tip.style.display = 'none';
+  }
+}
+
+function updateLastSyncDisplay() {
+  const el = document.getElementById('last-sync-info');
+  if (jiraSettings.lastSync) {
+    const d = new Date(jiraSettings.lastSync);
+    el.innerHTML = '<span><span class="last-sync-dot"></span>Last synced: '+d.toLocaleString()+'</span>'
+      +'<span style="color:var(--text-dim)">'+(jiraSettings.lastCount||0)+' tickets pulled</span>';
+  } else {
+    el.innerHTML = '<span><span class="last-sync-dot" style="background:var(--text-dim)"></span>Never synced</span>';
+  }
+}
+
+// ── Results Modal ─────────────────────────────────────
+function showResults(heading, summary, items) {
+  document.getElementById('results-heading').textContent = heading;
+  document.getElementById('results-summary').textContent = summary;
+  const list = document.getElementById('results-list');
+  list.innerHTML = '';
+  items.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'sync-result-item';
+    li.innerHTML = '<span class="key">'+esc(item.key)+'</span>'
+      +'<span class="title">'+esc(item.title)+'</span>'
+      +'<span class="status '+(item.added?'added':'')+'\">'+(item.added?'+ added':'already on board')+'</span>';
+    list.appendChild(li);
+  });
+  document.getElementById('results-overlay').classList.add('open');
+}
+function closeResults()           { document.getElementById('results-overlay').classList.remove('open'); }
+function closeResultsOnOverlay(e) { if (e.target === document.getElementById('results-overlay')) closeResults(); }
+
+// ── Sync Bar ──────────────────────────────────────────
+let syncBarTimer = null;
+function showSyncBar(msg, type, autoDismiss) {
+  type = type || 'info'; autoDismiss = autoDismiss || 0;
+  const bar = document.getElementById('sync-bar');
+  bar.className = 'sync-bar visible ' + type;
+  document.getElementById('sync-bar-text').textContent = msg;
+  if (syncBarTimer) clearTimeout(syncBarTimer);
+  if (autoDismiss) syncBarTimer = setTimeout(() => bar.classList.remove('visible'), autoDismiss);
+}
+
+// ═══════════════════════════════════════════════════════
+// Dev Console
+// ═══════════════════════════════════════════════════════
+let consoleOpen = false;
+let activeTab   = 'log';
+let logEntries  = [];
+let netEntries  = [];
+let errorCount  = 0;
+
+function dcTs() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0')+'.'+String(d.getMilliseconds()).padStart(3,'0');
+}
+
+function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function clog(level) {
+  const args = Array.prototype.slice.call(arguments, 1);
+  const msg = args.map(function(a){
+    if (a instanceof Error) return a.message + (a.stack ? '\n'+a.stack : '');
+    if (a && typeof a === 'object') { try { return JSON.stringify(a,null,2); } catch(e) { return String(a); } }
+    return String(a);
+  }).join(' ');
+  const entry = { id: logEntries.length, level: level, msg: msg, time: dcTs() };
+  logEntries.push(entry);
+  if (level === 'error') {
+    errorCount++;
+    const badge = document.getElementById('error-badge');
+    if (badge) { badge.textContent = errorCount; badge.classList.add('visible'); }
+    const dot = document.getElementById('console-dot');
+    if (dot) dot.classList.add('active');
+  }
+  if (consoleOpen && activeTab === 'log') _appendLogEntry(entry);
+}
+
+function _appendLogEntry(entry) {
+  const panel = document.getElementById('panel-log');
+  if (!panel) return;
+  const ph = panel.querySelector('.console-empty');
+  if (ph) ph.remove();
+  // Guard against duplicate nodes when switching tabs
+  if (panel.querySelector('[data-lid="'+entry.id+'"]')) return;
+  const el = document.createElement('div');
+  el.className = 'log-entry log-' + entry.level;
+  el.dataset.lid = entry.id;
+  el.innerHTML = '<span class="log-ts">'+entry.time+'</span>'
+    + '<span class="log-level">'+entry.level.toUpperCase()+'</span>'
+    + '<span class="log-msg">'+escH(entry.msg)+'</span>';
+  panel.appendChild(el);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function netRecord(id, method, url, body) {
+  netEntries.push({ id:id, method:method, url:url, body:body, status:null, response:null, startTime:Date.now(), duration:null, size:null });
+}
+
+function netComplete(id, status, response) {
+  const entry = netEntries.find(function(e){ return e.id===id; });
+  if (entry) {
+    entry.status   = status;
+    entry.response = response;
+    entry.duration = Date.now() - entry.startTime;
+    entry.size     = response ? (response.length/1024).toFixed(1)+' KB' : '-';
+  }
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  ['log','network','state'].forEach(function(t){
+    const btn = document.getElementById('tab-'+t);
+    const pnl = document.getElementById('panel-'+t);
+    if (btn) btn.classList.toggle('active', t===tab);
+    if (pnl) pnl.classList.toggle('active', t===tab);
+  });
+  if (tab==='log')     _renderLogPanel();
+  if (tab==='network') _renderNetworkPanel();
+  if (tab==='state')   _renderStatePanel();
+}
+
+function _renderLogPanel() {
+  const panel = document.getElementById('panel-log');
+  if (!panel) return;
+  // Always wipe first to prevent bleed when switching tabs
+  panel.innerHTML = '';
+  if (!logEntries.length) {
+    panel.innerHTML = '<div class="console-empty" style="color:#333;font-size:11px;padding:16px 14px;font-family:Space Mono,monospace;">No log entries yet.</div>';
+    return;
+  }
+  // Re-render all entries fresh from the source array
+  logEntries.forEach(function(e){ _appendLogEntry(e); });
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function _renderNetworkPanel() {
+  const panel = document.getElementById('panel-network');
+  if (!panel) return;
+  panel.innerHTML = '';
+  const old = document.getElementById('net-detail-pane');
+  if (old) old.remove();
+  if (!netEntries.length) {
+    panel.innerHTML = '<div style="color:#b8b0a8;font-size:11px;padding:16px 14px;font-family:Space Mono,monospace;">No network requests yet. Hit Sync Jira to start.</div>';
+    return;
+  }
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'display:grid;grid-template-columns:52px 1fr 60px 70px 72px;gap:8px;padding:5px 14px;border-bottom:1px solid #d8d3ca;font-size:9px;color:#b8b0a8;letter-spacing:1px;text-transform:uppercase;font-family:Space Mono,monospace;background:#ece9e3;';
+  hdr.innerHTML = '<span>Method</span><span>URL</span><span>Status</span><span>Time</span><span>Size</span>';
+  panel.appendChild(hdr);
+  netEntries.forEach(function(entry, idx){
+    const sc = !entry.status ? '#c49a00' : entry.status>=200 && entry.status<300 ? '#008f5a' : '#e03d00';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:52px 1fr 60px 70px 72px;gap:8px;padding:6px 14px;border-bottom:1px solid #ede9e3;font-size:10px;cursor:pointer;font-family:Space Mono,monospace;transition:background 0.1s;background:#fff;';
+    row.innerHTML = '<span style="color:#0052CC;font-weight:700;">'+escH(entry.method)+'</span>'
+      +'<span style="color:#7a736a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escH(entry.url)+'">'+escH(entry.url.replace('https://',''))+'</span>'
+      +'<span style="text-align:right;color:'+sc+';">'+(entry.status||'...')+'</span>'
+      +'<span style="text-align:right;color:#b8b0a8;">'+(entry.duration?entry.duration+'ms':'-')+'</span>'
+      +'<span style="text-align:right;color:#b8b0a8;">'+(entry.size||'-')+'</span>';
+    row.addEventListener('mouseover', function(){ row.style.background='#f0ece6'; });
+    row.addEventListener('mouseout',  function(){ row.style.background='#fff'; });
+    row.addEventListener('click', function(){ _showNetDetail(idx); });
+    panel.appendChild(row);
+  });
+}
+
+function _showNetDetail(idx) {
+  const old = document.getElementById('net-detail-pane');
+  if (old) old.remove();
+  const entry = netEntries[idx];
+  if (!entry) return;
+  function pj(str) {
+    if (!str) return '(empty)';
+    try { return JSON.stringify(JSON.parse(str),null,2); } catch(e){ return str; }
+  }
+  const pane = document.createElement('div');
+  pane.id = 'net-detail-pane';
+  pane.style.cssText = 'background:#f0ece6;border-top:2px solid #0052CC;padding:12px 14px;font-size:10px;color:#7a736a;font-family:Space Mono,monospace;overflow-y:auto;flex-shrink:0;max-height:240px;';
+  const preStyle = 'color:#4a4540;white-space:pre-wrap;word-break:break-all;background:#fff;padding:8px;border:1px solid #d8d3ca;max-height:120px;overflow-y:auto;font-family:Space Mono,monospace;font-size:9px;margin:0;';
+  pane.innerHTML = '<div style="color:#0052CC;letter-spacing:2px;text-transform:uppercase;font-size:9px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">'
+    + '<span>'+escH(entry.method)+' '+escH(entry.url)+'</span>'
+    + '<span style="color:#a09890;">'+(entry.status||'pending')+(entry.duration?' &bull; '+entry.duration+'ms':'')+'</span>'
+    + '</div>'
+    + '<div style="margin-bottom:10px;"><div style="color:#b8b0a8;letter-spacing:2px;text-transform:uppercase;font-size:8px;margin-bottom:4px;">REQUEST BODY</div>'
+    + '<pre style="'+preStyle+'">'+escH(pj(entry.body))+'</pre></div>'
+    + '<div><div style="color:#b8b0a8;letter-spacing:2px;text-transform:uppercase;font-size:8px;margin-bottom:4px;">RESPONSE</div>'
+    + '<pre style="'+preStyle+'">'+escH(pj(entry.response))+'</pre></div>';
+  document.getElementById('panel-network').appendChild(pane);
+}
+
+function _renderStatePanel() {
+  const panel = document.getElementById('panel-state');
+  if (!panel) return;
+  panel.innerHTML = '';
+  const lastSync = jiraSettings.lastSync ? new Date(jiraSettings.lastSync).toLocaleString() : 'Never';
+  var sections = [
+    { title:'Board', rows:[
+      ['Total tasks',   tasks.length],
+      ['To Do',         tasks.filter(function(t){return t.col==='todo';}).length],
+      ['In Progress',   tasks.filter(function(t){return t.col==='prog';}).length],
+      ['Completed',     tasks.filter(function(t){return t.col==='done';}).length],
+      ['Jira-synced',   tasks.filter(function(t){return t.jiraKey;}).length],
+      ['High priority', tasks.filter(function(t){return t.priority==='high';}).length],
+    ]},
+    { title:'Jira Settings', rows:[
+      ['Max tickets',    jiraSettings.maxTickets||20],
+      ['Custom JQL',     jiraSettings.jql||'(default)'],
+      ['Last sync',      lastSync],
+      ['Tickets pulled', jiraSettings.lastCount!=null?jiraSettings.lastCount:'-'],
+    ]},
+    { title:'Console', rows:[
+      ['Log entries',      logEntries.length],
+      ['Errors',           errorCount],
+      ['Network requests', netEntries.length],
+      ['Theme',            isDark?'dark':'light'],
+      ['localStorage KB',  (JSON.stringify(localStorage).length/1024).toFixed(1)],
+    ]}
+  ];
+  sections.forEach(function(sec){
+    const div = document.createElement('div');
+    div.className = 'state-section';
+    div.innerHTML = '<div class="state-section-title">'+escH(sec.title)+'</div>'
+      + '<div class="state-grid">'+sec.rows.map(function(r){
+        return '<span class="state-key">'+escH(String(r[0]))+'</span><span class="state-val">'+escH(String(r[1]))+'</span>';
+      }).join('')+'</div>';
+    panel.appendChild(div);
+  });
+}
+
+function toggleConsole() {
+  consoleOpen = !consoleOpen;
+  document.getElementById('dev-console').classList.toggle('open', consoleOpen);
+  if (consoleOpen) {
+    switchTab(activeTab);
+    errorCount = 0;
+    const badge = document.getElementById('error-badge');
+    if (badge) badge.classList.remove('visible');
+  }
+}
+
+function copyConsoleLog() {
+  const text = logEntries.map(function(e){ return '['+e.time+'] '+e.level.toUpperCase().padEnd(5,' ')+' '+e.msg; }).join('\n');
+  navigator.clipboard.writeText(text).catch(function(){});
+  clog('info','Log copied to clipboard.');
+}
+
+function clearConsole() {
+  logEntries = []; netEntries = []; errorCount = 0;
+  const old = document.getElementById('net-detail-pane');
+  if (old) old.remove();
+  const badge = document.getElementById('error-badge');
+  if (badge) badge.classList.remove('visible');
+  const dot = document.getElementById('console-dot');
+  if (dot) dot.classList.remove('active');
+  _renderLogPanel();
+  clog('debug','Console cleared.');
+}
+
+// Intercept console.error / .warn
+const _origError = console.error.bind(console);
+const _origWarn  = console.warn.bind(console);
+console.error = function(){ _origError.apply(console,arguments); clog.apply(null,['error'].concat(Array.from(arguments))); };
+console.warn  = function(){ _origWarn.apply(console,arguments);  clog.apply(null,['warn'].concat(Array.from(arguments))); };
+window.addEventListener('error', function(e){ clog('error','Uncaught: '+e.message+' ('+e.filename+':'+e.lineno+')'); });
+window.addEventListener('unhandledrejection', function(e){ clog('error','Unhandled promise rejection: '+e.reason); });
+
+clog('debug','WingIt dev console ready. Press Sync Jira to begin.');
+
+// ── Jira Sync ─────────────────────────────────────────
+async function runJiraSync() {
+  const btn      = document.getElementById('sync-btn');
+  const btnIcon  = document.getElementById('sync-btn-icon');
+  const btnLabel = document.getElementById('sync-btn-label');
+
+  btn.disabled         = true;
+  btnIcon.innerHTML    = '<span class="sync-spinner"></span>';
+  btnLabel.textContent = 'Syncing\u2026';
+  showSyncBar('Connecting to Jira via Atlassian MCP\u2026', 'info');
+
+  const maxTickets = jiraSettings.maxTickets || 20;
+  const jql = jiraSettings.jql || 'assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC';
+
+  clog('info', 'Starting Jira sync \u2014 max: '+maxTickets+', JQL: '+jql);
+
+  const prompt = 'You are a Jira integration assistant. Using the Atlassian MCP tools available to you, fetch Jira issues assigned to the current user.\n\nSteps:\n1. Use available MCP tools to discover accessible Jira sites/projects.\n2. Search for issues using this JQL: '+jql+'\n3. Limit results to '+maxTickets+' issues.\n4. Return ONLY a valid JSON array (no markdown fences, no explanation) using this exact structure:\n[{"key":"PROJ-123","title":"Issue summary","description":"Brief description or empty string","priority":"high","labels":["label1"]}]\n\nMap Jira priorities: Highest/High/Critical/Blocker -> "high", Medium -> "med", Low/Lowest/Minor/Trivial -> "low"\nIf no issues found or error, return: []\nReturn ONLY the JSON array.';
+
+  const requestBody = JSON.stringify({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 4000,
+    mcp_servers: [{ type: 'url', url: 'https://mcp.atlassian.com/v1/mcp', name: 'atlassian-mcp' }],
+    messages: [{ role: 'user', content: prompt }]
+  });
+
+  const reqId  = 'req_' + Date.now();
+  const apiUrl = 'https://api.anthropic.com/v1/messages';
+
+  if (!jiraSettings.apiKey) {
+    clog('error', 'No Anthropic API key set. Open Settings (⚙) and add your key from console.anthropic.com/settings/keys');
+    showSyncBar('\u26a0 No API key — open \u2699 Settings to add one', 'error', 8000);
+    btn.disabled = false; btnIcon.textContent = '\u21BB'; btnLabel.textContent = 'Sync Jira';
+    return;
+  }
+  clog('req', 'POST ' + apiUrl);
+  clog('debug', 'Model: claude-sonnet-4-20250514  MCP: atlassian-mcp');
+  netRecord(reqId, 'POST', apiUrl, requestBody);
+
+  try {
+    const startTime = Date.now();
+    const response  = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': jiraSettings.apiKey || '',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'anthropic-beta': 'mcp-client-2025-04-04'
+      },
+      body: requestBody
+    });
+
+    const elapsed     = Date.now() - startTime;
+    const rawResponse = await response.text();
+
+    clog('res', 'HTTP ' + response.status + ' in ' + elapsed + 'ms');
+    netComplete(reqId, response.status, rawResponse);
+
+    if (!response.ok) {
+      let errMsg = 'API error ' + response.status;
+      try { errMsg = JSON.parse(rawResponse).error?.message || errMsg; } catch(e){}
+      clog('error', 'API error: ' + errMsg);
+      clog('debug', 'Full error body:\n' + rawResponse);
+      throw new Error(errMsg);
+    }
+
+    clog('ok', 'API call succeeded (' + elapsed + 'ms)');
+
+    const data = JSON.parse(rawResponse);
+    const blocks = data.content || [];
+    clog('debug', 'Response content blocks: ' + blocks.length);
+
+    blocks.forEach(function(block, i){
+      let info = 'Block['+i+'] type='+block.type;
+      if (block.type==='text')           info += '  len='+(block.text||'').length;
+      if (block.type==='mcp_tool_use')   info += '  tool='+block.name;
+      if (block.type==='mcp_tool_result') info += '  result_len='+((block.content||[{text:''}])[0].text||'').length;
+      clog('debug', info);
+    });
+
+    const rawText = blocks.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    clog('debug', 'Extracted text: '+rawText.length+' chars');
+
+    if (!rawText.trim()) {
+      clog('warn', 'No text block in response. Model may have only invoked tools. Check Network tab for full response.');
+    }
+
+    const clean = rawText.replace(/```json|```/gi,'').trim();
+    clog('debug', 'JSON preview: '+clean.slice(0,120)+(clean.length>120?'\u2026':''));
+
+    let tickets = [];
+    try {
+      tickets = JSON.parse(clean);
+      if (!Array.isArray(tickets)) { clog('warn','Parsed value is not an array ('+typeof tickets+'). Resetting to [].'); tickets = []; }
+      clog('ok', 'Parsed '+tickets.length+' ticket(s)');
+    } catch(parseErr) {
+      clog('error', 'JSON parse failed: '+parseErr.message);
+      clog('debug', 'Text that failed:\n'+clean.slice(0,500));
+      throw new Error('Could not parse Jira response \u2014 see Dev Console Network tab for raw response.');
+    }
+
+    const existingKeys = new Set(tasks.filter(function(t){return t.jiraKey;}).map(function(t){return t.jiraKey;}));
+    const results = [];
+    let addedCount = 0;
+
+    tickets.forEach(function(ticket){
+      const already = existingKeys.has(ticket.key);
+      clog('debug', ticket.key+': "'+ticket.title+'" \u2014 '+(already?'skipped (already on board)':'adding to To Do'));
+      results.push({ key:ticket.key, title:ticket.title, added:!already });
+      if (!already) {
+        tasks.push({ id:uid(), col:'todo', title:ticket.title, desc:ticket.description||'',
+          priority:ticket.priority||'med', tags:Array.isArray(ticket.labels)?ticket.labels:[], jiraKey:ticket.key });
+        addedCount++;
+      }
+    });
+
+    save(); render();
+    clog('ok', 'Sync complete \u2014 '+addedCount+' added, '+(tickets.length-addedCount)+' already on board');
+
+    jiraSettings.lastSync  = new Date().toISOString();
+    jiraSettings.lastCount = tickets.length;
+    localStorage.setItem('wingit-jira-settings', JSON.stringify(jiraSettings));
+
+    const summary = tickets.length===0
+      ? 'No assigned Jira tickets found matching your query.'
+      : 'Found '+tickets.length+' ticket'+(tickets.length!==1?'s':'')+' \u2014 '+addedCount+' added to To Do, '+(tickets.length-addedCount)+' already on board.';
+
+    showSyncBar(addedCount>0 ? '\u2713 '+addedCount+' ticket'+(addedCount!==1?'s':'')+' added to To Do' : '\u2713 Board is up to date', 'success', 6000);
+    if (results.length>0) showResults('Sync Complete', summary, results);
+
+  } catch(err) {
+    clog('error', 'runJiraSync failed: '+err.message);
+    if (err.stack) clog('debug', 'Stack:\n'+err.stack);
+    netComplete(reqId, 0, JSON.stringify({error:err.message}));
+    showSyncBar('\u2715 Sync failed: '+err.message, 'error', 10000);
+  } finally {
+    btn.disabled         = false;
+    btnIcon.textContent  = '\u21BB';
+    btnLabel.textContent = 'Sync Jira';
+    if (consoleOpen && activeTab==='network') _renderNetworkPanel();
+    if (consoleOpen && activeTab==='state')   _renderStatePanel();
+  }
+}
+
+// ── Drag & Drop ───────────────────────────────────────
+function bindDragDrop() {
+  document.querySelectorAll('.card').forEach(function(c){
+    c.addEventListener('dragstart', function(e){
+      dragId = c.dataset.id;
+      setTimeout(function(){ c.classList.add('dragging'); }, 0);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    c.addEventListener('dragend', function(){
+      c.classList.remove('dragging');
+      document.querySelectorAll('.col-body').forEach(function(b){ b.classList.remove('drag-over'); });
+    });
+  });
+  document.querySelectorAll('.col-body').forEach(function(body){
+    body.addEventListener('dragover',  function(e){ e.preventDefault(); body.classList.add('drag-over'); });
+    body.addEventListener('dragleave', function(){ body.classList.remove('drag-over'); });
+    body.addEventListener('drop', function(e){
+      e.preventDefault(); body.classList.remove('drag-over');
+      if (!dragId) return;
+      const t = tasks.find(function(x){ return x.id===dragId; });
+      if (t) { t.col = body.dataset.col; save(); render(); }
+      dragId = null;
+    });
+  });
+}
+
+// ── Keyboard shortcuts ────────────────────────────────
+document.addEventListener('keydown', function(e){
+  if (e.key==='Escape') { closeModal(); closeSettings(); closeResults(); }
+  if (e.key==='Enter' && document.getElementById('modal-overlay').classList.contains('open') && e.target.tagName!=='TEXTAREA') saveCard();
+});
+
+// ── Theme ─────────────────────────────────────────────
+let isDark = localStorage.getItem('kanban-theme') === 'dark';
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  document.getElementById('toggle-icon').textContent  = isDark ? '\u263D' : '\u2600';
+  document.getElementById('toggle-label').textContent = isDark ? 'Dark' : 'Light';
+}
+function toggleTheme() {
+  isDark = !isDark;
+  localStorage.setItem('kanban-theme', isDark ? 'dark' : 'light');
+  applyTheme();
+}
+applyTheme();
+
+// ── Init ──────────────────────────────────────────────
+updateSyncBtnState();
+render();
+</script>
+</body>
+</html>
