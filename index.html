@@ -1210,12 +1210,12 @@ async function runJiraSync() {
 
     tickets.forEach(function(ticket) {
       const already = existingKeys.has(ticket.key);
-      clog('debug', ticket.key + ': "' + ticket.title + '" — ' + (already ? 'skipped' : 'adding'));
+      clog('debug', ticket.key + ': "' + ticket.title + '" [' + (ticket.status||'todo') + '] — ' + (already ? 'skipped' : 'adding'));
       results.push({ key: ticket.key, title: ticket.title, added: !already });
       if (!already) {
         tasks.push({
           id:       uid(),
-          col:      'todo',
+          col:      ticket.status || 'todo',
           title:    ticket.title,
           desc:     ticket.description || '',
           priority: ticket.priority    || 'med',
