@@ -577,6 +577,7 @@
       <label>Jira Domain</label>
       <input type="text" id="s-domain" placeholder="yourcompany.atlassian.net" autocomplete="off" />
       <div class="tag-hint">Your Atlassian domain, e.g. acme.atlassian.net</div>
+      <div id="creds-status" style="font-family:'Space Mono',monospace;font-size:10px;margin-top:6px;"></div>
     </div>
     <div class="form-group">
       <label>Atlassian Email</label>
@@ -815,6 +816,17 @@ function openSettings() {
   document.getElementById('s-jql').value    = jiraSettings.jql || '';
   updateLastSyncDisplay();
   document.getElementById('settings-overlay').classList.add('open');
+  // Show what's currently saved so user knows state
+  var status = document.getElementById('creds-status');
+  if (status) {
+    if (jiraSettings.domain && jiraSettings.email && jiraSettings.token) {
+      status.style.color = '#008f5a';
+      status.textContent = '✓ Saved: ' + jiraSettings.email + ' @ ' + jiraSettings.domain;
+    } else {
+      status.style.color = '#e03d00';
+      status.textContent = '⚠ Credentials not yet saved';
+    }
+  }
   if (!jiraSettings.domain) {
     setTimeout(function(){ document.getElementById('s-domain').focus(); }, 200);
   }
@@ -840,6 +852,7 @@ function saveSettings() {
   jiraSettings.jql        = document.getElementById('s-jql').value.trim();
   localStorage.setItem('wingit-jira-settings', JSON.stringify(jiraSettings));
   updateSyncBtnState();
+  clog('ok', 'Settings saved — domain: '+jiraSettings.domain+', email: '+jiraSettings.email+', token: '+(jiraSettings.token?'set':'NOT SET'));
   closeSettings();
   showSyncBar('Settings saved.', 'info', 2500);
 }
