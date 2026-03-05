@@ -99,7 +99,7 @@
     .card.dragging { opacity: 0.4; cursor: grabbing; }
     .card.jira-card { border-left: 3px solid var(--accent-jira); }
     .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-    .card-title { font-weight: 500; font-size: 14px; line-height: 1.4; color: var(--text); flex: 1; }
+    .card-title { font-weight: 500; font-size: 14px; line-height: 1.4; color: var(--text); flex: 1; overflow-wrap: break-word; word-break: break-word; min-width: 0; }
     .card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
     .card:hover .card-actions { opacity: 1; }
     .card-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 4px; font-size: 13px; transition: color 0.1s; }
@@ -109,8 +109,10 @@
     .card-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
     .tags { display: flex; flex-wrap: wrap; gap: 4px; }
     .tag { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; padding: 2px 6px; background: var(--tag-bg); color: var(--tag-text); border: 1px solid var(--border); }
-    .tag.jira-key { background: rgba(0,82,204,0.08); color: var(--accent-jira); border-color: var(--accent-jira); }
+    .tag.jira-key { background: rgba(0,82,204,0.08); color: var(--accent-jira); border-color: var(--accent-jira); text-decoration: none; cursor: pointer; }
+    .tag.jira-key:hover { background: rgba(0,82,204,0.18); text-decoration: underline; }
     [data-theme="dark"] .tag.jira-key { background: rgba(76,154,255,0.1); }
+    [data-theme="dark"] .tag.jira-key:hover { background: rgba(76,154,255,0.2); }
     .priority { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; padding: 2px 7px; border: 1px solid; font-weight: 700; }
     .priority-high { color: var(--accent-todo); border-color: var(--accent-todo); background: rgba(255,77,0,0.08); }
     .priority-med  { color: var(--accent-prog); border-color: var(--accent-prog); background: rgba(245,197,24,0.08); }
@@ -706,7 +708,8 @@ function makeCard(t) {
   el.className  = 'card' + (t.jiraKey ? ' jira-card' : '');
   el.dataset.id = t.id;
   el.draggable  = true;
-  const keyTag  = t.jiraKey ? '<span class="tag jira-key">'+esc(t.jiraKey)+'</span>' : '';
+  const jiraUrl  = t.jiraKey ? 'https://' + (jiraSettings.domain || 'jira.atlassian.net') + '/browse/' + esc(t.jiraKey) : '';
+  const keyTag   = t.jiraKey ? '<a class="tag jira-key" href="'+jiraUrl+'" target="_blank" rel="noopener" title="Open in Jira" onclick="event.stopPropagation()">'+esc(t.jiraKey)+' ↗</a>' : '';
   el.innerHTML  = '<div class="card-top">'
     + '<div class="card-title">' + (t.col==='done'?'<span class="done-check">&#x2713;</span>':'') + esc(t.title) + '</div>'
     + '<div class="card-actions">'
