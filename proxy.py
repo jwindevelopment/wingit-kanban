@@ -90,12 +90,15 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
                 for issue in data.get("issues", []):
                     f        = issue.get("fields", {})
                     priority = (f.get("priority") or {}).get("name", "Medium")
+                    status_name = (f.get("status") or {}).get("name", "")
+                    status_cat  = ((f.get("status") or {}).get("statusCategory") or {}).get("key", "")
                     tickets.append({
                         "key":         issue.get("key", ""),
                         "title":       f.get("summary", ""),
                         "description": self.extract_desc(f.get("description")),
                         "priority":    self.map_priority(priority),
-                        "labels":      f.get("labels", [])
+                        "labels":      f.get("labels", []),
+                        "status":      self.map_status(status_name, status_cat)
                     })
                 self.send_json(200, {"tickets": tickets, "total": data.get("total", 0)})
 
@@ -127,6 +130,23 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
             return " ".join(parts)[:200]
         except Exception:
             return ""
+
+    def map_status(self, name, category):
+        """Map Jira status to WingIt column: todo | prog | done"""
+        # First try the statusCategory key (most reliable)
+        if category == "done":
+            return "done"
+        if category == "indeterminate":  # Jira's category for in-progress
+            return "prog"
+        if category == "new":
+            return "todo"
+        # Fall back to matching status name
+        name_lower = name.lower()
+        if any(x in name_lower for x in ("done", "complete", "closed", "resolved", "fixed", "released")):
+            return "done"
+        if any(x in name_lower for x in ("progress", "review", "testing", "blocked", "in dev", "doing")):
+            return "prog"
+        return "todo"
 
     def map_priority(self, p):
         p = (p or "").lower()
