@@ -9,4 +9,4 @@ cd ~/Code/wingit-kanban && git pull && bash launch.sh
 ```
 
 Starts the app on http://localhost:8080 and an Anthropic proxy on http://localhost:3001.
-Add your Anthropic API key in the Settings panel.
+Add your Jira credentials in the Settings panel.
