@@ -1,24 +1,15 @@
 #!/bin/bash
 # WingIt — Launch Script
-# Run this once from anywhere. It serves index.html from ~/Downloads.
+# Starts the Anthropic proxy (port 3001) + file server (port 8080), opens browser.
 
-PORT="${PORT:-8080}"
-FILE="index.html"
+APP_PORT="${APP_PORT:-8080}"
+PROXY_PORT=3001
+DIR="$HOME/Code/wingit-kanban"
 
-# Find the most recently downloaded WingIt index.html in ~/Downloads
-DOWNLOADS="$HOME/Downloads"
-SRC=$(ls -t "$DOWNLOADS"/index*.html 2>/dev/null | head -1)
-
-if [ -z "$SRC" ]; then
-  echo "❌  No index.html found in ~/Downloads."
-  echo "    Download the latest WingIt file from Claude and try again."
+if [ ! -d "$DIR" ]; then
+  echo "❌  $DIR not found. Run: git clone https://github.com/jwindevelopment/wingit-kanban.git ~/Code/wingit-kanban"
   exit 1
 fi
-
-# Copy to ~/Code/kanban-app/ so it's served cleanly
-DIR="$HOME/Code/kanban-app"
-mkdir -p "$DIR"
-cp "$SRC" "$DIR/index.html"
 
 cd "$DIR"
 
@@ -30,26 +21,32 @@ echo "  ██║███╗██║██║██║╚██╗██║█
 echo "  ╚███╔███╔╝██║██║ ╚████║╚██████╔╝██║   ██║   "
 echo "   ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝   ╚═╝  "
 echo ""
-echo "  Source:  $SRC"
-echo "  Serving: $DIR/index.html"
-echo "  URL:     http://localhost:$PORT"
+echo "  App:    http://localhost:$APP_PORT"
+echo "  Proxy:  http://localhost:$PROXY_PORT  (Anthropic API)"
 echo ""
-echo "  Press Ctrl+C to stop."
+echo "  Press Ctrl+C to stop both servers."
 echo ""
+
+# Kill proxy on exit
+cleanup() {
+  echo ""
+  echo "  Shutting down..."
+  kill "$PROXY_PID" 2>/dev/null
+  exit 0
+}
+trap cleanup INT TERM
+
+# Start proxy in background
+python3 "$DIR/proxy.py" &
+PROXY_PID=$!
+
+# Give proxy a moment to bind
+sleep 0.5
 
 # Open browser
 if command -v open &>/dev/null; then
-  (sleep 0.8 && open "http://localhost:$PORT") &
+  (sleep 0.5 && open "http://localhost:$APP_PORT") &
 fi
 
-# Start server
-if command -v python3 &>/dev/null; then
-  python3 -m http.server "$PORT"
-elif command -v python &>/dev/null; then
-  python -m SimpleHTTPServer "$PORT"
-elif command -v npx &>/dev/null; then
-  npx --yes serve -l "$PORT" .
-else
-  echo "❌  No suitable server found. Install Python 3 or Node.js."
-  exit 1
-fi
+# Start file server (foreground)
+python3 -m http.server "$APP_PORT"
