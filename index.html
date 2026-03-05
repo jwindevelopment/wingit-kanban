@@ -491,7 +491,7 @@
       <span id="sync-btn-icon">&#x21BB;</span>
       <span id="sync-btn-label">Sync Jira</span>
     </button>
-    <span id="sync-no-key-tip" style="display:none;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--accent-todo);cursor:pointer;" onclick="openSettings()" title="Click to open settings">&#x26A0; No API key</span>
+    <span id="sync-no-key-tip" style="display:none;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--accent-todo);cursor:pointer;" onclick="openSettings()" title="Click to open settings">&#x26A0; No Jira credentials</span>
     <button class="hdr-btn" onclick="openSettings()" title="Jira settings">&#9881;</button>
     <button class="hdr-btn" id="theme-toggle" onclick="toggleTheme()">
       <span id="toggle-icon">&#x2600;</span>
@@ -574,21 +574,30 @@
       <button class="modal-close" onclick="closeSettings()">&#x2715;</button>
     </div>
     <div class="form-group">
+      <label>Jira Domain</label>
+      <input type="text" id="s-domain" placeholder="yourcompany.atlassian.net" autocomplete="off" />
+      <div class="tag-hint">Your Atlassian domain, e.g. acme.atlassian.net</div>
+    </div>
+    <div class="form-group">
+      <label>Atlassian Email</label>
+      <input type="email" id="s-email" placeholder="you@company.com" autocomplete="off" />
+    </div>
+    <div class="form-group">
+      <label>Atlassian API Token</label>
+      <div style="position:relative;">
+        <input type="password" id="s-token" placeholder="Your API token" autocomplete="off" />
+        <button onclick="toggleTokenVisibility()" id="s-token-toggle" type="button" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--text-muted);padding:2px 4px;">SHOW</button>
+      </div>
+      <div class="tag-hint">Generate at id.atlassian.com/manage-profile/security/api-tokens</div>
+    </div>
+    <div class="form-group">
       <label>Max tickets to pull</label>
       <input type="number" id="s-max" min="1" max="100" value="20" />
     </div>
     <div class="form-group">
-      <label>Anthropic API Key</label>
-      <div style="position:relative;">
-        <input type="password" id="s-apikey" placeholder="sk-ant-..." autocomplete="off" />
-        <button onclick="toggleApiKeyVisibility()" id="s-apikey-toggle" type="button" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--text-muted);padding:2px 4px;">SHOW</button>
-      </div>
-      <div class="tag-hint">Stored locally in your browser only. Get yours at console.anthropic.com/settings/keys</div>
-    </div>
-    <div class="form-group">
       <label>JQL Query Override</label>
-      <textarea id="s-jql" rows="3" placeholder="assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC"></textarea>
-      <div class="tag-hint">Leave blank to use the default query shown above</div>
+      <textarea id="s-jql" rows="2" placeholder="assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC"></textarea>
+      <div class="tag-hint">Leave blank to use the default query above</div>
     </div>
     <div class="settings-section">
       <div class="settings-section-title">Sync Status</div>
@@ -799,20 +808,21 @@ function deleteCard(id) { tasks = tasks.filter(x => x.id !== id); save(); render
 
 // ── Settings Modal ────────────────────────────────────
 function openSettings() {
+  document.getElementById('s-domain').value = jiraSettings.domain || '';
+  document.getElementById('s-email').value  = jiraSettings.email  || '';
+  document.getElementById('s-token').value  = jiraSettings.token  || '';
   document.getElementById('s-max').value    = jiraSettings.maxTickets || 20;
   document.getElementById('s-jql').value    = jiraSettings.jql || '';
-  document.getElementById('s-apikey').value = jiraSettings.apiKey || '';
   updateLastSyncDisplay();
   document.getElementById('settings-overlay').classList.add('open');
-  // Briefly highlight the key field if missing
-  if (!jiraSettings.apiKey) {
-    setTimeout(function(){ document.getElementById('s-apikey').focus(); }, 200);
+  if (!jiraSettings.domain) {
+    setTimeout(function(){ document.getElementById('s-domain').focus(); }, 200);
   }
 }
 
-function toggleApiKeyVisibility() {
-  var inp = document.getElementById('s-apikey');
-  var btn = document.getElementById('s-apikey-toggle');
+function toggleTokenVisibility() {
+  var inp = document.getElementById('s-token');
+  var btn = document.getElementById('s-token-toggle');
   if (inp.type === 'password') { inp.type = 'text';     btn.textContent = 'HIDE'; }
   else                         { inp.type = 'password'; btn.textContent = 'SHOW'; }
 }
@@ -820,21 +830,25 @@ function closeSettings()           { document.getElementById('settings-overlay')
 function closeSettingsOnOverlay(e) { if (e.target === document.getElementById('settings-overlay')) closeSettings(); }
 
 function saveSettings() {
+  const domain = document.getElementById('s-domain').value.trim();
+  const email  = document.getElementById('s-email').value.trim();
+  const token  = document.getElementById('s-token').value.trim();
+  if (domain) jiraSettings.domain = domain;
+  if (email)  jiraSettings.email  = email;
+  if (token)  jiraSettings.token  = token;
   jiraSettings.maxTickets = parseInt(document.getElementById('s-max').value) || 20;
   jiraSettings.jql        = document.getElementById('s-jql').value.trim();
-  const keyVal            = document.getElementById('s-apikey').value.trim();
-  if (keyVal) jiraSettings.apiKey = keyVal;
   localStorage.setItem('wingit-jira-settings', JSON.stringify(jiraSettings));
   updateSyncBtnState();
   closeSettings();
-  showSyncBar('Settings saved.' + (keyVal ? ' API key stored.' : ''), 'info', 2500);
+  showSyncBar('Settings saved.', 'info', 2500);
 }
 
 function updateSyncBtnState() {
   var btn = document.getElementById('sync-btn');
   var tip = document.getElementById('sync-no-key-tip');
-  if (!jiraSettings.apiKey) {
-    btn.title = 'Add your Anthropic API key in Settings first';
+  if (!jiraSettings.domain || !jiraSettings.token || !jiraSettings.email) {
+    btn.title = 'Add your Jira credentials in Settings (⚙) first';
     if (tip) tip.style.display = 'inline';
   } else {
     btn.title = '';
@@ -1045,6 +1059,9 @@ function _renderStatePanel() {
       ['High priority', tasks.filter(function(t){return t.priority==='high';}).length],
     ]},
     { title:'Jira Settings', rows:[
+      ['Domain',         jiraSettings.domain||'(not set)'],
+      ['Email',          jiraSettings.email||'(not set)'],
+      ['Token',          jiraSettings.token ? jiraSettings.token.slice(0,8)+'...' : '(not set)'],
       ['Max tickets',    jiraSettings.maxTickets||20],
       ['Custom JQL',     jiraSettings.jql||'(default)'],
       ['Last sync',      lastSync],
@@ -1116,46 +1133,37 @@ async function runJiraSync() {
 
   btn.disabled         = true;
   btnIcon.innerHTML    = '<span class="sync-spinner"></span>';
-  btnLabel.textContent = 'Syncing\u2026';
-  showSyncBar('Connecting to Jira via Atlassian MCP\u2026', 'info');
+  btnLabel.textContent = 'Syncing…';
+  showSyncBar('Connecting to Jira…', 'info');
 
+  const domain     = jiraSettings.domain || '';
+  const email      = jiraSettings.email  || '';
+  const token      = jiraSettings.token  || '';
   const maxTickets = jiraSettings.maxTickets || 20;
-  const jql = jiraSettings.jql || 'assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC';
+  const jql        = jiraSettings.jql || 'assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC';
 
-  clog('info', 'Starting Jira sync \u2014 max: '+maxTickets+', JQL: '+jql);
-
-  const prompt = 'You are a Jira integration assistant. Using the Atlassian MCP tools available to you, fetch Jira issues assigned to the current user.\n\nSteps:\n1. Use available MCP tools to discover accessible Jira sites/projects.\n2. Search for issues using this JQL: '+jql+'\n3. Limit results to '+maxTickets+' issues.\n4. Return ONLY a valid JSON array (no markdown fences, no explanation) using this exact structure:\n[{"key":"PROJ-123","title":"Issue summary","description":"Brief description or empty string","priority":"high","labels":["label1"]}]\n\nMap Jira priorities: Highest/High/Critical/Blocker -> "high", Medium -> "med", Low/Lowest/Minor/Trivial -> "low"\nIf no issues found or error, return: []\nReturn ONLY the JSON array.';
-
-  const requestBody = JSON.stringify({
-    __api_key: jiraSettings.apiKey || '',   // proxy extracts this server-side
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4000,
-    mcp_servers: [{ type: 'url', url: 'https://mcp.atlassian.com/v1/mcp', name: 'atlassian-mcp' }],
-    messages: [{ role: 'user', content: prompt }]
-  });
-
-  const reqId  = 'req_' + Date.now();
-  const apiUrl = 'http://localhost:3001/v1/messages'; // local proxy → api.anthropic.com
-
-  if (!jiraSettings.apiKey) {
-    clog('error', 'No Anthropic API key set. Open Settings (⚙) and add your key from console.anthropic.com/settings/keys');
-    showSyncBar('\u26a0 No API key — open \u2699 Settings to add one', 'error', 8000);
-    btn.disabled = false; btnIcon.textContent = '\u21BB'; btnLabel.textContent = 'Sync Jira';
+  if (!domain || !email || !token) {
+    clog('error', 'Jira credentials missing. Open ⚙ Settings and fill in domain, email, and API token.');
+    showSyncBar('⚠ No Jira credentials — open ⚙ Settings', 'error', 8000);
+    btn.disabled = false; btnIcon.textContent = '↻'; btnLabel.textContent = 'Sync Jira';
     return;
   }
-  const reqHeaders = {
-    'Content-Type': 'application/json'
-    // Auth headers are added server-side by proxy.py to avoid CORS issues
-  };
+
+  clog('info', 'Starting Jira sync — domain: '+domain+', max: '+maxTickets);
+  clog('debug', 'JQL: '+jql);
+
+  const requestBody = JSON.stringify({ domain, email, token, jql, maxResults: maxTickets });
+  const reqId  = 'req_' + Date.now();
+  const apiUrl = 'http://localhost:3001/jira/search';
+
   clog('req', 'POST ' + apiUrl);
-  clog('debug', 'Routing via local proxy → api.anthropic.com (api key injected server-side)');
   netRecord(reqId, 'POST', apiUrl, requestBody);
 
   try {
     const startTime = Date.now();
     const response  = await fetch(apiUrl, {
       method: 'POST',
-      headers: reqHeaders,
+      headers: { 'Content-Type': 'application/json' },
       body: requestBody
     });
 
@@ -1166,88 +1174,72 @@ async function runJiraSync() {
     netComplete(reqId, response.status, rawResponse);
 
     if (!response.ok) {
-      let errMsg = 'API error ' + response.status;
-      try { errMsg = JSON.parse(rawResponse).error?.message || errMsg; } catch(e){}
-      clog('error', 'API error: ' + errMsg);
-      clog('debug', 'Full error body:\n' + rawResponse);
+      let errMsg = 'Proxy error ' + response.status;
+      try {
+        const parsed = JSON.parse(rawResponse);
+        errMsg = parsed.error || errMsg;
+        if (parsed.detail) clog('debug', 'Detail: ' + JSON.stringify(parsed.detail, null, 2));
+      } catch(e){}
+      clog('error', errMsg);
       throw new Error(errMsg);
     }
 
-    clog('ok', 'API call succeeded (' + elapsed + 'ms)');
-
-    const data = JSON.parse(rawResponse);
-    const blocks = data.content || [];
-    clog('debug', 'Response content blocks: ' + blocks.length);
-
-    blocks.forEach(function(block, i){
-      let info = 'Block['+i+'] type='+block.type;
-      if (block.type==='text')           info += '  len='+(block.text||'').length;
-      if (block.type==='mcp_tool_use')   info += '  tool='+block.name;
-      if (block.type==='mcp_tool_result') info += '  result_len='+((block.content||[{text:''}])[0].text||'').length;
-      clog('debug', info);
-    });
-
-    const rawText = blocks.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
-    clog('debug', 'Extracted text: '+rawText.length+' chars');
-
-    if (!rawText.trim()) {
-      clog('warn', 'No text block in response. Model may have only invoked tools. Check Network tab for full response.');
-    }
-
-    const clean = rawText.replace(/```json|```/gi,'').trim();
-    clog('debug', 'JSON preview: '+clean.slice(0,120)+(clean.length>120?'\u2026':''));
-
-    let tickets = [];
-    try {
-      tickets = JSON.parse(clean);
-      if (!Array.isArray(tickets)) { clog('warn','Parsed value is not an array ('+typeof tickets+'). Resetting to [].'); tickets = []; }
-      clog('ok', 'Parsed '+tickets.length+' ticket(s)');
-    } catch(parseErr) {
-      clog('error', 'JSON parse failed: '+parseErr.message);
-      clog('debug', 'Text that failed:\n'+clean.slice(0,500));
-      throw new Error('Could not parse Jira response \u2014 see Dev Console Network tab for raw response.');
-    }
+    const data    = JSON.parse(rawResponse);
+    const tickets = data.tickets || [];
+    clog('ok', 'Jira responded — total: ' + data.total + ', returned: ' + tickets.length);
 
     const existingKeys = new Set(tasks.filter(function(t){return t.jiraKey;}).map(function(t){return t.jiraKey;}));
     const results = [];
     let addedCount = 0;
 
-    tickets.forEach(function(ticket){
+    tickets.forEach(function(ticket) {
       const already = existingKeys.has(ticket.key);
-      clog('debug', ticket.key+': "'+ticket.title+'" \u2014 '+(already?'skipped (already on board)':'adding to To Do'));
-      results.push({ key:ticket.key, title:ticket.title, added:!already });
+      clog('debug', ticket.key + ': "' + ticket.title + '" — ' + (already ? 'skipped' : 'adding'));
+      results.push({ key: ticket.key, title: ticket.title, added: !already });
       if (!already) {
-        tasks.push({ id:uid(), col:'todo', title:ticket.title, desc:ticket.description||'',
-          priority:ticket.priority||'med', tags:Array.isArray(ticket.labels)?ticket.labels:[], jiraKey:ticket.key });
+        tasks.push({
+          id:       uid(),
+          col:      'todo',
+          title:    ticket.title,
+          desc:     ticket.description || '',
+          priority: ticket.priority    || 'med',
+          tags:     Array.isArray(ticket.labels) ? ticket.labels : [],
+          jiraKey:  ticket.key
+        });
         addedCount++;
       }
     });
 
     save(); render();
-    clog('ok', 'Sync complete \u2014 '+addedCount+' added, '+(tickets.length-addedCount)+' already on board');
+    clog('ok', 'Sync complete — ' + addedCount + ' added, ' + (tickets.length - addedCount) + ' already on board');
 
     jiraSettings.lastSync  = new Date().toISOString();
     jiraSettings.lastCount = tickets.length;
     localStorage.setItem('wingit-jira-settings', JSON.stringify(jiraSettings));
 
-    const summary = tickets.length===0
-      ? 'No assigned Jira tickets found matching your query.'
-      : 'Found '+tickets.length+' ticket'+(tickets.length!==1?'s':'')+' \u2014 '+addedCount+' added to To Do, '+(tickets.length-addedCount)+' already on board.';
+    const summary = tickets.length === 0
+      ? 'No Jira tickets found matching your query.'
+      : 'Found ' + tickets.length + ' ticket' + (tickets.length !== 1 ? 's' : '') + ' — ' + addedCount + ' added to To Do, ' + (tickets.length - addedCount) + ' already on board.';
 
-    showSyncBar(addedCount>0 ? '\u2713 '+addedCount+' ticket'+(addedCount!==1?'s':'')+' added to To Do' : '\u2713 Board is up to date', 'success', 6000);
-    if (results.length>0) showResults('Sync Complete', summary, results);
+    showSyncBar(
+      addedCount > 0
+        ? '✓ ' + addedCount + ' ticket' + (addedCount !== 1 ? 's' : '') + ' added to To Do'
+        : '✓ Board is up to date',
+      'success', 6000
+    );
+    if (results.length > 0) showResults('Sync Complete', summary, results);
 
   } catch(err) {
-    clog('error', 'runJiraSync failed: '+err.message);
-    if (err.stack) clog('debug', 'Stack:\n'+err.stack);
-    netComplete(reqId, 0, JSON.stringify({error:err.message}));
-    showSyncBar('\u2715 Sync failed: '+err.message, 'error', 10000);
+    clog('error', 'runJiraSync failed: ' + err.message);
+    if (err.stack) clog('debug', 'Stack:\n' + err.stack);
+    netComplete(reqId, 0, JSON.stringify({ error: err.message }));
+    showSyncBar('✕ Sync failed: ' + err.message, 'error', 10000);
   } finally {
     btn.disabled         = false;
-    btnIcon.textContent  = '\u21BB';
+    btnIcon.textContent  = '↻';
     btnLabel.textContent = 'Sync Jira';
-    if (consoleOpen && activeTab==='network') _renderNetworkPanel();
-    if (consoleOpen && activeTab==='state')   _renderStatePanel();
+    if (consoleOpen && activeTab === 'network') _renderNetworkPanel();
+    if (consoleOpen && activeTab === 'state')   _renderStatePanel();
   }
 }
 
