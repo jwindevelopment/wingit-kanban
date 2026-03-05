@@ -1142,21 +1142,24 @@ async function runJiraSync() {
     btn.disabled = false; btnIcon.textContent = '\u21BB'; btnLabel.textContent = 'Sync Jira';
     return;
   }
+  const reqHeaders = {
+    'Content-Type': 'application/json',
+    'x-api-key': jiraSettings.apiKey || '',
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
+    'anthropic-beta': 'mcp-client-2025-04-04'
+  };
   clog('req', 'POST ' + apiUrl);
-  clog('debug', 'Model: claude-sonnet-4-20250514  MCP: atlassian-mcp');
+  clog('debug', 'Headers: ' + JSON.stringify(Object.fromEntries(
+    Object.entries(reqHeaders).map(([k,v]) => [k, k==='x-api-key' ? v.slice(0,12)+'...' : v])
+  ), null, 2));
   netRecord(reqId, 'POST', apiUrl, requestBody);
 
   try {
     const startTime = Date.now();
     const response  = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': jiraSettings.apiKey || '',
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        'anthropic-beta': 'mcp-client-2025-04-04'
-      },
+      headers: reqHeaders,
       body: requestBody
     });
 
