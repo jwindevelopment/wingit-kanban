@@ -1,12 +1,7 @@
 # WingIt - Kanban Task Board
 
-A Kanban board with Jira sync.
-
-## Run locally
+Jira sync via direct REST API.
 
 ```bash
 cd ~/Code/wingit-kanban && git pull && bash launch.sh
 ```
-
-Starts the app on http://localhost:8080 and an Anthropic proxy on http://localhost:3001.
-Add your Jira credentials in the Settings panel.
